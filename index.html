@@ -196,8 +196,7 @@ filtersDiv.appendChild(clear);
 
         const tags = document.createElement('div');
         tags.className = 'tags';
-        const allowed = (study.tags || []).filter(tag => customTags.includes(tag.toLowerCase()));
-tags.textContent = 'Tags: ' + allowed.join(', ');
+        tags.textContent = 'Tags: ' + (study.tags || []).join(', ');
 
         const summary = document.createElement('div');
         summary.className = 'summary';
