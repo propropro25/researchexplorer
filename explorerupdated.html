@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Study Explorer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #111;
+      color: #eee;
+      padding: 2em;
+    }
+    input {
+      padding: 0.5em;
+      width: 100%;
+      font-size: 1em;
+      margin-bottom: 1em;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+    }
+    .study {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      margin-bottom: 1em;
+      padding: 1em;
+    }
+    .title {
+      font-weight: bold;
+      font-size: 1.1em;
+      color: #4ef0f0;
+    }
+    .tags {
+      color: #aaa;
+      font-size: 0.9em;
+    }
+    .summary {
+      margin-top: 0.5em;
+    }
+    .link {
+      margin-top: 0.5em;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>Interactive Study Explorer</h1>
+  <input type="text" id="search" placeholder="Search title, tags, summary..." oninput="filterStudies()">
+
+  <div id="container">Loading studies...</div>
+
+  <script>
+    let studies = [];
+
+    function createStudyHTML(study) {
+      return `
+        <div class="study">
+          <div class="title">${study.title}</div>
+          <div class="tags">Tags: ${study.tags.join(', ')}</div>
+          ${study.summary ? `<div class="summary">${study.summary}</div>` : ''}
+          <a class="link" href="${study.link}" target="_blank">View Study</a>
+        </div>
+      `;
+    }
+
+    function renderStudies(list) {
+      const container = document.getElementById('container');
+      container.innerHTML = list.length
+        ? list.map(createStudyHTML).join('')
+        : '<p>No results found.</p>';
+    }
+
+    function filterStudies() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = studies.filter(s =>
+        s.title.toLowerCase().includes(q) ||
+        s.summary?.toLowerCase().includes(q) ||
+        s.tags.join(' ').toLowerCase().includes(q)
+      );
+      renderStudies(filtered);
+    }
+
+    fetch('studies.json')
+      .then(res => res.json())
+      .then(data => {
+        studies = data;
+        renderStudies(studies);
+      })
+      .catch(err => {
+        document.getElementById('container').innerHTML = '<p style="color:red;">Failed to load studies.json</p>';
+        console.error(err);
+      });
+  </script>
+</body>
+</html>
