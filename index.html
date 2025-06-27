@@ -100,14 +100,14 @@
       .then(res => res.json())
       .then(async data => {
         allStudies = await Promise.all(data.map(enrichStudyWithDOI));
-        renderFilters(allStudies);
+        renderFilters();
         renderStudies(allStudies);
       })
       .catch(err => {
         document.getElementById('results').innerHTML = '<p style="color:red;">Failed to load studies.json</p>';
       });
 
-    function renderFilters(data) {
+    function renderFilters() {
       const customTags = [
   'covid-19', 'sars-cov-2', 'mRNA', 'moderna', 'influenza', 'h1n1', 'measles', 'mumps', 'rubella', 'mmr',
   'dtp', 'diphtheria', 'tetanus', 'pertussis', 'rabies', 'hepatitis', 'virus',
