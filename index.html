@@ -6,90 +6,223 @@
   <style>
     body {
       font-family: sans-serif;
-      background-color: #111;
+      background: #111;
       color: #eee;
       padding: 2em;
     }
-    input {
-      padding: 0.5em;
+    input, select {
       width: 100%;
-      font-size: 1em;
-      margin-bottom: 1em;
+      padding: 1em;
+      font-size: 1.1em;
       background: #222;
-      color: #eee;
-      border: 1px solid #444;
+      color: #ccc;
+      border: 1px solid #333;
+      margin-bottom: 1.5em;
     }
     .study {
       background: #1a1a1a;
-      border: 1px solid #333;
-      margin-bottom: 1em;
-      padding: 1em;
+      border-left: 4px solid #149bae;
+      padding: 1.5em;
+      margin-bottom: 1.5em;
     }
     .title {
+      font-size: 1.2em;
       font-weight: bold;
-      font-size: 1.1em;
-      color: #4ef0f0;
+      color: #149bae;
     }
     .tags {
-      color: #aaa;
       font-size: 0.9em;
+      color: #999;
+      margin-top: 0.5em;
     }
     .summary {
-      margin-top: 0.5em;
+      margin: 0.8em 0;
+      font-size: 1em;
+      color: #ccc;
     }
-    .link {
-      margin-top: 0.5em;
-      display: block;
+    .link a {
+      color: #ed3535;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .link a:hover {
+      text-decoration: underline;
+    }
+    mark {
+      background-color: #444;
+      color: #fff;
+      padding: 0 2px;
     }
   </style>
 </head>
 <body>
   <h1>Interactive Study Explorer</h1>
-  <input type="text" id="search" placeholder="Search title, tags, summary..." oninput="filterStudies()">
 
-  <div id="container">Loading studies...</div>
+  <div id="filters" style="margin-bottom: 1em;"></div>
+
+  <select id="sorter">
+    <option value="title">Sort: Title</option>
+    <option value="date">Sort: Date</option>
+  </select>
+
+  <input type="text" id="search" placeholder="Search title, tags, summary...">
+
+  <button id="randomBtn" style="background:#444; color:#fff; padding:0.5em 1em; border:none; margin-bottom:1em; cursor:pointer;">
+    🔀 Random Study
+  </button>
+
+  <div id="results">Loading studies...</div>
 
   <script>
-    let studies = [];
+    let allStudies = [];
 
-    function createStudyHTML(study) {
-      return `
-        <div class="study">
-          <div class="title">${study.title}</div>
-          <div class="tags">Tags: ${study.tags.join(', ')}</div>
-          ${study.summary ? `<div class="summary">${study.summary}</div>` : ''}
-          <a class="link" href="${study.link}" target="_blank">View Study</a>
-        </div>
-      `;
-    }
+    async function enrichStudyWithDOI(study) {
+      if (!study.doi) return study;
 
-    function renderStudies(list) {
-      const container = document.getElementById('container');
-      container.innerHTML = list.length
-        ? list.map(createStudyHTML).join('')
-        : '<p>No results found.</p>';
-    }
+      try {
+        const res = await fetch(`https://api.crossref.org/works/${study.doi}`);
+        const data = await res.json();
+        const item = data.message;
 
-    function filterStudies() {
-      const q = document.getElementById('search').value.toLowerCase();
-      const filtered = studies.filter(s =>
-        s.title.toLowerCase().includes(q) ||
-        s.summary?.toLowerCase().includes(q) ||
-        s.tags.join(' ').toLowerCase().includes(q)
-      );
-      renderStudies(filtered);
+        study.title = study.title || item.title?.[0] || 'Untitled';
+        study.authors = item.author?.map(a => `${a.given} ${a.family}`) || [];
+        study.journal = item['container-title']?.[0] || '';
+        study.date = item.issued?.['date-parts']?.[0]?.join('-') || null;
+        study.summary = study.summary || item.abstract?.replace(/<\/?jats:[^>]+>/g, '') || '';
+      } catch (err) {
+        console.warn('DOI metadata fetch failed:', study.doi);
+      }
+
+      return study;
     }
 
     fetch('studies.json')
       .then(res => res.json())
-      .then(data => {
-        studies = data;
-        renderStudies(studies);
+      .then(async data => {
+        allStudies = await Promise.all(data.map(enrichStudyWithDOI));
+        renderFilters(allStudies);
+        renderStudies(allStudies);
       })
       .catch(err => {
-        document.getElementById('container').innerHTML = '<p style="color:red;">Failed to load studies.json</p>';
-        console.error(err);
+        document.getElementById('results').innerHTML = '<p style="color:red;">Failed to load studies.json</p>';
       });
+
+    function renderFilters(data) {
+      const tagSet = new Set();
+      data.forEach(study => {
+        (study.tags || []).forEach(tag => tagSet.add(tag));
+      });
+
+      const filtersDiv = document.getElementById('filters');
+      tagSet.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.textContent = tag;
+        btn.style = 'margin: 0.2em; padding: 0.4em 0.6em; background:#333; color:#ccc; border:1px solid #444; cursor:pointer;';
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#filters button').forEach(b => b.style.background = '#333');
+          btn.style.background = '#005577';
+          const filtered = allStudies.filter(study => (study.tags || []).includes(tag));
+          renderStudies(filtered);
+        });
+        filtersDiv.appendChild(btn);
+      });
+
+      const clear = document.createElement('button');
+      clear.textContent = 'Clear Filters';
+      clear.style = 'margin-left: 1em; background:#550000; color:#fff;';
+      clear.onclick = () => renderStudies(allStudies);
+      filtersDiv.appendChild(clear);
+    }
+
+    document.getElementById('search').addEventListener('input', () => {
+      const query = document.getElementById('search').value.toLowerCase();
+      const filtered = allStudies.filter(study =>
+        (study.title || '').toLowerCase().includes(query) ||
+        (study.summary || '').toLowerCase().includes(query) ||
+        (study.tags || []).some(t => t.toLowerCase().includes(query))
+      );
+      renderStudies(filtered);
+    });
+
+    document.getElementById('sorter').addEventListener('change', () => {
+      const sorted = [...allStudies];
+      const key = document.getElementById('sorter').value;
+
+      if (key === 'date') {
+        sorted.sort((a, b) => new Date(b.date || '1900') - new Date(a.date || '1900'));
+      } else {
+        sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+      }
+
+      renderStudies(sorted);
+    });
+
+    document.getElementById('randomBtn').addEventListener('click', () => {
+      const random = allStudies[Math.floor(Math.random() * allStudies.length)];
+      renderStudies([random]);
+    });
+
+    function renderStudies(studies) {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      if (studies.length === 0) {
+        resultsDiv.innerHTML = '<p style="color:#888;">No matching studies found.</p>';
+        return;
+      }
+
+      studies.forEach(study => {
+        const box = document.createElement('div');
+        box.className = 'study';
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = study.title || 'Untitled';
+
+        const tags = document.createElement('div');
+        tags.className = 'tags';
+        tags.textContent = 'Tags: ' + (study.tags || []).join(', ');
+
+        const summary = document.createElement('div');
+        summary.className = 'summary';
+
+        const query = document.getElementById('search').value.toLowerCase();
+        const highlight = text => {
+          if (!query) return text;
+          const re = new RegExp(`(${query})`, 'gi');
+          return text.replace(re, '<mark>$1</mark>');
+        };
+
+        const trimmed = (study.summary || '').slice(0, 300);
+        summary.innerHTML = highlight(trimmed);
+
+        if ((study.summary || '').length > 300) {
+          const btn = document.createElement('button');
+          btn.textContent = 'Show more';
+          btn.style = 'margin-top: 0.5em; display: block; background: #222; color: #999; border: none; cursor: pointer;';
+          btn.onclick = () => {
+            summary.innerHTML = highlight(study.summary || '');
+            btn.remove();
+          };
+          box.appendChild(btn);
+        }
+
+        const link = document.createElement('div');
+        link.className = 'link';
+        const a = document.createElement('a');
+        a.href = study.link || '#';
+        a.textContent = 'View Study';
+        a.target = '_blank';
+        link.appendChild(a);
+
+        box.appendChild(title);
+        box.appendChild(tags);
+        box.appendChild(summary);
+        box.appendChild(link);
+
+        resultsDiv.appendChild(box);
+      });
+    }
   </script>
 </body>
 </html>
